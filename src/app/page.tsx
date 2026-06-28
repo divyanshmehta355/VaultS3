@@ -386,9 +386,10 @@ export default function Home() {
 
           batch.push(
             (async () => {
+              const arrayBuffer = await chunk.arrayBuffer();
               const uploadRes = await fetch(presignedUrl, {
                 method: "PUT",
-                body: chunk,
+                body: arrayBuffer,
               });
 
               if (!uploadRes.ok) throw new Error(`Failed to upload part ${partNumber}`);
