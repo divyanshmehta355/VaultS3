@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { format } from "date-fns";
 import { partial } from "filesize";
 import { UploadCloud, File, Trash2, Download, Loader2, Pencil, Check, X, Eye, Share2, Search, LogOut, Folder, FolderPlus, ChevronRight, LayoutGrid, List, FolderOutput } from "lucide-react";
@@ -100,6 +100,21 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<{ files: FileObject[], folders: FolderObject[] } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const router = useRouter();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const displayFiles = searchResults ? searchResults.files : files;
+  const displayFolders = searchResults ? searchResults.folders : folders;
+
+  const sortedAndFilteredFiles = displayFiles
+    .sort((a, b) => {
+      if (sortBy === "newest") return new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime();
+      if (sortBy === "oldest") return new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime();
+      if (sortBy === "largest") return b.size - a.size;
+      if (sortBy === "smallest") return a.size - b.size;
+      return 0;
+    });
+
+  const filteredFolders = displayFolders;
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -150,6 +165,72 @@ export default function Home() {
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts if user is typing in an input (except Escape/Ctrl+F)
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        if (e.key === 'Escape') {
+          setEditingKey(null);
+          setPreviewUrl(null);
+          setPreviewType(null);
+          setPreviewKey(null);
+          setSharingKey(null);
+          setGeneratedShareUrl(null);
+          setMovingKeys([]);
+          setSelectedItems(new Set());
+          (e.target as HTMLElement).blur();
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        setEditingKey(null);
+        setPreviewUrl(null);
+        setPreviewType(null);
+        setPreviewKey(null);
+        setSharingKey(null);
+        setGeneratedShareUrl(null);
+        setMovingKeys([]);
+        setSelectedItems(new Set());
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedItems.size > 0) {
+          e.preventDefault();
+          if (!confirm(`Are you sure you want to delete ${selectedItems.size} items?`)) return;
+          const keys = Array.from(selectedItems).filter(k => !k.endsWith("/"));
+          const prefixes = Array.from(selectedItems).filter(k => k.endsWith("/"));
+          fetch("/api/bulk/delete", {
+            method: "POST",
+            body: JSON.stringify({ keys, prefixes }),
+            headers: { "Content-Type": "application/json" },
+          }).then(() => {
+            setSelectedItems(new Set());
+            fetchFiles();
+          }).catch(err => {
+            console.error("Bulk delete failed", err);
+            alert("Failed to delete some items");
+          });
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        const allKeys = [
+          ...filteredFolders.map(f => f.name),
+          ...sortedAndFilteredFiles.map(f => f.key)
+        ];
+        if (selectedItems.size === allKeys.length && allKeys.length > 0) {
+          setSelectedItems(new Set());
+        } else {
+          setSelectedItems(new Set(allKeys));
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedItems, filteredFolders, sortedAndFilteredFiles, fetchFiles]);
 
   const createFolder = async () => {
     const folderName = prompt("Enter folder name:");
@@ -590,20 +671,6 @@ export default function Home() {
     }
   };
 
-  const displayFiles = searchResults ? searchResults.files : files;
-  const displayFolders = searchResults ? searchResults.folders : folders;
-
-  const sortedAndFilteredFiles = displayFiles
-    .sort((a, b) => {
-      if (sortBy === "newest") return new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime();
-      if (sortBy === "oldest") return new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime();
-      if (sortBy === "largest") return b.size - a.size;
-      if (sortBy === "smallest") return a.size - b.size;
-      return 0;
-    });
-
-  const filteredFolders = displayFolders;
-
   return (
     <main className="min-h-screen p-8 md:p-24 relative overflow-hidden">
       {/* Background Decorative Elements */}
@@ -779,8 +846,9 @@ export default function Home() {
             <div className="relative w-full sm:w-64">
               <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
+                ref={searchInputRef}
                 type="text"
-                placeholder="Search files..."
+                placeholder="Search files (Ctrl+F)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-slate-800/50 border border-slate-600/50 rounded-full pl-10 pr-4 py-2 text-sm outline-none focus:border-blue-400 transition-colors placeholder:text-slate-500 text-slate-200 shadow-inner"
