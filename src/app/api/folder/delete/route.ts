@@ -17,20 +17,20 @@ export async function POST(request: Request) {
     let continuationToken: string | undefined = undefined;
 
     while (isTruncated) {
-      const listCommand = new ListObjectsV2Command({
+      const listCommand: ListObjectsV2Command = new ListObjectsV2Command({
         Bucket: bucketName,
         Prefix: folderPrefix,
         ContinuationToken: continuationToken,
       });
 
-      const listResponse = await s3Client.send(listCommand);
+      const listResponse: any = await s3Client.send(listCommand);
 
       if (listResponse.Contents && listResponse.Contents.length > 0) {
         // 2. Delete all objects found
         const deleteCommand = new DeleteObjectsCommand({
           Bucket: bucketName,
           Delete: {
-            Objects: listResponse.Contents.map((item) => ({ Key: item.Key })),
+            Objects: listResponse.Contents.map((item: any) => ({ Key: item.Key })),
             Quiet: false,
           },
         });
