@@ -48,7 +48,7 @@ export default function Login() {
             <Lock className="w-8 h-8 text-blue-400" />
           </div>
           <h1 className="text-3xl font-bold tracking-tighter mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
-            CloudFlow
+            VaultS3
           </h1>
           <p className="text-slate-400">Enter your password to access your files</p>
         </div>

@@ -336,7 +336,7 @@ export default function Home() {
         <header className="mb-12 flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           <div>
             <h1 className="text-4xl md:text-6xl font-bold tracking-tighter mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
-              CloudFlow
+              VaultS3
             </h1>
             <p className="text-slate-400 text-lg">Your minimalistic file manager</p>
           </div>

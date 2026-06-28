@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CloudFlow | Minimal File Manager",
+  title: "VaultS3 | Minimal File Manager",
   description: "A beautiful, minimalistic file manager powered by Minio",
 };
 
