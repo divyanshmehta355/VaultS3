@@ -26,6 +26,49 @@ function getCleanFileName(key: string) {
   return key.replace(uuidRegex, '');
 }
 
+function FolderSizeIndicator({ prefix, viewMode }: { prefix: string, viewMode: "grid" | "list" }) {
+  const [size, setSize] = useState<number | null>(null);
+  const [count, setCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSize = async () => {
+      try {
+        const res = await fetch(`/api/folder/size?prefix=${encodeURIComponent(prefix)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) {
+            setSize(data.size);
+            setCount(data.count);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch folder size", error);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchSize();
+    return () => { isMounted = false; };
+  }, [prefix]);
+
+  if (loading) {
+    return (
+      <div className={viewMode === "grid" ? "flex justify-between items-center text-sm text-slate-400 mt-4" : "hidden sm:flex items-center gap-4 lg:gap-6 w-32 md:w-48 text-sm text-slate-400 flex-shrink-0"}>
+        <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className={viewMode === "grid" ? "flex justify-between items-center text-sm text-slate-400 mt-4" : "hidden sm:flex items-center gap-4 lg:gap-6 w-32 md:w-48 text-sm text-slate-400 flex-shrink-0"}>
+      <span className={viewMode === "list" ? "w-16 text-left truncate" : ""}>{size !== null ? sizeFormatter(size) : "Unknown"}</span>
+      <span className={viewMode === "list" ? "w-24 text-left truncate" : ""}>{count !== null ? `${count} file${count === 1 ? '' : 's'}` : "-"}</span>
+    </div>
+  );
+}
+
 export default function Home() {
   const [files, setFiles] = useState<FileObject[]>([]);
   const [folders, setFolders] = useState<FolderObject[]>([]);
@@ -54,6 +97,8 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "largest" | "smallest">("newest");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [searchResults, setSearchResults] = useState<{ files: FileObject[], folders: FolderObject[] } | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -62,7 +107,7 @@ export default function Home() {
     router.refresh();
   };
 
-  const fetchFiles = async () => {
+  const fetchFiles = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/files?prefix=${encodeURIComponent(currentPath)}`);
@@ -74,12 +119,37 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPath]);
 
   useEffect(() => {
     fetchFiles();
     setSelectedItems(new Set());
-  }, [currentPath]);
+  }, [currentPath, fetchFiles]);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery.trim())}`);
+        const data = await res.json();
+        if (res.ok) {
+          setSearchResults(data);
+        }
+      } catch (error) {
+        console.error("Search failed", error);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery]);
 
   const createFolder = async () => {
     const folderName = prompt("Enter folder name:");
@@ -520,11 +590,10 @@ export default function Home() {
     }
   };
 
-  const sortedAndFilteredFiles = files
-    .filter(file => {
-      const name = getCleanFileName(file.key).split("/").pop() || "";
-      return name.toLowerCase().includes(searchQuery.toLowerCase());
-    })
+  const displayFiles = searchResults ? searchResults.files : files;
+  const displayFolders = searchResults ? searchResults.folders : folders;
+
+  const sortedAndFilteredFiles = displayFiles
     .sort((a, b) => {
       if (sortBy === "newest") return new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime();
       if (sortBy === "oldest") return new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime();
@@ -533,10 +602,7 @@ export default function Home() {
       return 0;
     });
 
-  const filteredFolders = folders.filter(folder => {
-    const name = folder.name.split("/").filter(Boolean).pop() || "";
-    return name.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredFolders = displayFolders;
 
   return (
     <main className="min-h-screen p-8 md:p-24 relative overflow-hidden">
@@ -734,7 +800,7 @@ export default function Home() {
         </div>
         
         <div>
-          {loading ? (
+          {loading || isSearching ? (
             <div className="flex justify-center p-12">
               <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
             </div>
@@ -789,15 +855,12 @@ export default function Home() {
                       </div>
                     )}
                     <Folder className={`text-blue-400 fill-blue-400/20 ${viewMode === "grid" ? "w-10 h-10 mb-4" : "w-6 h-6 flex-shrink-0"}`} />
-                    <h4 className={`font-semibold truncate ${viewMode === "grid" ? "text-lg pr-16" : "text-sm"}`} title={folder.name.split("/").filter(Boolean).pop()}>
-                      {folder.name.split("/").filter(Boolean).pop()}
+                    <h4 className={`font-semibold truncate ${viewMode === "grid" ? "text-lg pr-16" : "text-sm"}`} title={searchResults ? folder.name : folder.name.split("/").filter(Boolean).pop()}>
+                      {searchResults ? folder.name : folder.name.split("/").filter(Boolean).pop()}
                     </h4>
                   </div>
                   
-                  <div className={viewMode === "grid" ? "flex justify-between items-center text-sm text-slate-400 mt-4" : "hidden sm:flex items-center gap-6 w-32 md:w-48 text-sm text-slate-400 flex-shrink-0"}>
-                    <span>Folder</span>
-                    {viewMode === "list" && <span>-</span>}
-                  </div>
+                  <FolderSizeIndicator prefix={folder.name} viewMode={viewMode} />
 
                   <div className={viewMode === "grid" ? "absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-20" : "opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-20 w-full sm:w-auto justify-end mt-2 sm:mt-0"}>
                     <button
@@ -859,8 +922,8 @@ export default function Home() {
                         <button onClick={() => setEditingKey(null)} className="text-red-400 hover:text-red-300"><X className="w-4 h-4" /></button>
                       </div>
                     ) : (
-                      <h4 className={`font-semibold truncate ${viewMode === "grid" ? "text-lg pr-16" : "text-sm"}`} title={getCleanFileName(file.key).split("/").pop()}>
-                        {getCleanFileName(file.key).split("/").pop()}
+                      <h4 className={`font-semibold truncate ${viewMode === "grid" ? "text-lg pr-16" : "text-sm"}`} title={searchResults ? file.key : getCleanFileName(file.key).split("/").pop()}>
+                        {searchResults ? file.key : getCleanFileName(file.key).split("/").pop()}
                       </h4>
                     )}
                   </div>
