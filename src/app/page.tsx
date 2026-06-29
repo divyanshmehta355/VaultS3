@@ -7,6 +7,7 @@ import { UploadCloud, File, Trash2, Download, Loader2, Pencil, Check, X, Eye, Sh
 import { useRouter } from "next/navigation";
 import Editor from "@monaco-editor/react";
 import Image from "next/image";
+import Video from "next-video";
 
 const sizeFormatter = partial({ standard: "jedec" });
 
@@ -1189,7 +1190,15 @@ export default function Home() {
             </button>
 
             {previewType === 'image' && <img src={previewUrl} alt="Preview" className="max-w-full max-h-[80vh] object-contain rounded-xl" />}
-            {previewType === 'video' && <video src={previewUrl} controls className="max-w-full max-h-[80vh] rounded-xl outline-none" autoPlay />}
+            {previewType === 'video' && (
+              <div className="w-full max-w-4xl rounded-xl overflow-hidden shadow-2xl">
+                <Video 
+                  src={previewUrl} 
+                  autoPlay 
+                  className="w-full max-h-[80vh] outline-none" 
+                />
+              </div>
+            )}
             {previewType === 'pdf' && <iframe src={previewUrl} className="w-full h-[80vh] rounded-xl bg-white border-0" />}
             {previewType === 'code' && (
               <div className="w-full h-[80vh] bg-[#1e1e1e] rounded-xl overflow-hidden flex flex-col">
